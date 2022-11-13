@@ -1,0 +1,13 @@
+ _format_version: "3.0"
+ _transform: true
+
+ services:
+  - host: localhost
+    name: hospital_wso2_service
+    port: 8029
+    protocol: http
+    routes:
+    - name: hospital_wso2_route
+      paths:
+      - /
+      strip_path: true
