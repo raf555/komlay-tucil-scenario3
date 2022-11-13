@@ -1,0 +1,21 @@
+ _format_version: "3.0"
+ _transform: true
+
+ services:
+  - host: host.docker.internal
+    name: producer
+    port: 8999
+    protocol: http
+    routes:
+      - name: get-doctors-result
+        methods: 
+        - GET        
+        paths:
+          - /doctors
+        strip_path: false
+      - name: post-doctors-request
+        methods: 
+        - POST        
+        paths:
+          - /doctors
+        strip_path: false

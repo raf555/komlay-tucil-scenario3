@@ -7,7 +7,7 @@ async function main() {
     });
 
     const consumer = kafka.consumer({
-        groupId: "pine-valley-consumer-group"
+        groupId: "grand-oak-consumer-group"
     });
     const producer = kafka.producer();
 
@@ -23,7 +23,7 @@ async function main() {
  * @param {import('kafkajs/types').Producer} producer 
  */
 async function handleIncomingMessage(consumer, producer) {
-    await consumer.subscribe({ topic: "doctors-request", fromBeginning: true });
+    await consumer.subscribe({ topic: "doctors-request", fromBeginning: false });
     await consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
             try {
@@ -44,9 +44,7 @@ async function handleIncomingMessage(consumer, producer) {
  */
 async function findDoctors(doctorType, producer) {
     try {
-        let res = await axios.post("http://localhost:9091/pineValley/doctors", {
-            doctorType: doctorType
-        }).then(res => res.data).catch(() => {
+        let res = await axios.get("http://localhost:9090/grandOak/doctors/" + doctorType).then(res => res.data).catch(() => {
             return {
                 "doctors": {
                     "doctor": []
@@ -54,12 +52,12 @@ async function findDoctors(doctorType, producer) {
             }
         });
         await producer.send({
-            topic: "pine-valley-result",
+            topic: "grand-oak-result",
             messages: [
                 { key: doctorType, value: JSON.stringify(res) }
             ]
         });
-        console.log("Succesfully push message pine-valley doctors " + doctorType);
+        console.log("Succesfully push message grand oak doctors " + doctorType);
     } catch (e) {
         console.error("Error when fetching/producing doctors data: " + e.message);
     }
