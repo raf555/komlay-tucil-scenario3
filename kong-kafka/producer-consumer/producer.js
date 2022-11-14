@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const { Kafka } = require("kafkajs");
+const exitHook = require('async-exit-hook');
 
 const app = express();
 const port = 8999;
@@ -10,14 +11,22 @@ const kafka = new Kafka({
     brokers: ["localhost:9092"]
 });
 const consumer = kafka.consumer({
-    groupId: "api-consumer-group"
+    groupId: "hospital-api-consumer-group"
 });
 const producer = kafka.producer();
+
+// cleanup
+exitHook((done) => {
+    Promise.allSettled([
+        consumer.disconnect(),
+        producer.disconnect()
+    ]).then(() => done()).catch(() => done());
+});
 
 /**
  * 
  * @param {{[doctorType: string]: Array}} resMap
- * @param {(string) => void} finish
+ * @param {(type: string) => void} finish
  */
 async function setupConsumer(resMap, finish) {
     const topics = [
@@ -25,7 +34,20 @@ async function setupConsumer(resMap, finish) {
         "grand-oak-result"
     ];
 
-    await Promise.all(topics.map(topic => consumer.subscribe({ topic: topic, fromBeginning: true })));
+    /**
+     * 
+     * @param {string} key 
+     */
+    function isFinishedThenProcess(key) {
+        let doctors = topics.map(topic => resMap[key].doctors[topic]);
+        let res = doctors.every(data => data !== undefined);
+        if (res) {
+            resMap[key].data = doctors.flat(1);
+        }
+        return res;
+    }
+
+    await Promise.all(topics.map(topic => consumer.subscribe({ topic: topic, fromBeginning: false })));
     console.log(`succesfully subscribing to ${topics.length} hospital topic`);
 
     await consumer.run({
@@ -33,9 +55,12 @@ async function setupConsumer(resMap, finish) {
             try {
                 if (!message.key) return;
                 let msg = JSON.parse(message.value.toString());
-                resMap[message.key.toString().toLowerCase()].push(msg.doctors.doctor);
-                if (topics.length === resMap[message.key.toString().toLowerCase()].length) {
-                    finish(message.key.toString());
+                if (!resMap[message.key.toString().toLowerCase()].doctors[topic]) {
+                    resMap[message.key.toString().toLowerCase()].doctors[topic] = [];
+                }
+                resMap[message.key.toString().toLowerCase()].doctors[topic].push(msg.doctors.doctor);
+                if (isFinishedThenProcess(message.key.toString().toLowerCase())) {
+                    finish(message.key.toString().toLowerCase());
                 }
             } catch (e) {
                 console.error("Error when handling incoming result:" + e.message)
@@ -69,7 +94,10 @@ async function setupServer() {
                 throw `request for ${doctorType} is not finished, please try again later`;
             }
 
-            result[doctorType.toLowerCase()] = [];
+            result[doctorType.toLowerCase()] = {
+                data: [],
+                doctors: {}
+            };
             finishedFetching[doctorType.toLowerCase()] = false;
 
             await producer.send({
@@ -108,7 +136,7 @@ async function setupServer() {
                 result: "success",
                 data: {
                     doctorType: doctorType.toLowerCase(),
-                    doctors: result[doctorType.toLowerCase()],
+                    doctors: result[doctorType.toLowerCase()].data,
                     lastFinishedRequest: timestampFetch[doctorType.toLowerCase()]
                 },
                 error: null

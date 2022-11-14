@@ -1,5 +1,6 @@
 const { Kafka } = require('kafkajs');
 const axios = require('axios').default || require('axios');
+const exitHook = require('async-exit-hook');
 
 async function main() {
     const kafka = new Kafka({
@@ -14,7 +15,19 @@ async function main() {
     await Promise.all([consumer.connect(), producer.connect()])
         .then(() => console.log("Connected as consumer and producer"));
 
-    handleIncomingMessage(consumer, producer);
+    // cleanup
+    exitHook((done) => {
+        Promise.allSettled([
+            consumer.disconnect(),
+            producer.disconnect()
+        ]).then(() => done()).catch(() => done());
+    });
+
+    handleIncomingMessage(consumer, producer).then(() => {
+        console.log("Listening for message at consumer-grand-oak..");
+    }).catch(e => {
+        console.error("Failed to listen for message at consumer-grand-oak. Err: " + e.message)
+    });
 }
 
 /**
