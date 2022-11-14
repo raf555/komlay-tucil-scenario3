@@ -25,7 +25,7 @@ exitHook((done) => {
 
 /**
  * 
- * @param {{[doctorType: string]: Array}} resMap
+ * @param {{[doctorType: string]: {data: Array, doctors: {[doctor: string]: Array}}}} resMap
  * @param {(type: string) => void} finish
  */
 async function setupConsumer(resMap, finish) {
